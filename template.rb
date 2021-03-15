@@ -9,15 +9,15 @@ require "shellwords"
 def add_template_repository_to_source_path
   if __FILE__ =~ %r{\Ahttps?://}
     require "tmpdir"
-    source_paths.unshift(tempdir = Dir.mktmpdir("jumpstart-"))
+    source_paths.unshift(tempdir = Dir.mktmpdir("jumpstarter-"))
     at_exit { FileUtils.remove_entry(tempdir) }
     git clone: [
       "--quiet",
-      "https://github.com/excid3/jumpstart.git",
+      "https://github.com/whatapalaver/jumpstarter.git",
       tempdir
     ].map(&:shellescape).join(" ")
 
-    if (branch = __FILE__[%r{jumpstart/(.+)/template.rb}, 1])
+    if (branch = __FILE__[%r{jumpstarter/(.+)/template.rb}, 1])
       Dir.chdir(tempdir) { git checkout: branch }
     end
   else
@@ -38,11 +38,11 @@ def rails_6?
 end
 
 def add_gems
-  gem 'bootstrap', '~> 4.5'
-  gem 'devise', '~> 4.7', '>= 4.7.1'
+  gem 'pg'
+  gem 'devise', '~> 4.7', '>= 4.7.3'
   gem 'devise-bootstrapped', github: 'excid3/devise-bootstrapped', branch: 'bootstrap4'
   gem 'devise_masquerade', '~> 1.2'
-  gem 'font-awesome-sass', '~> 5.13'
+  gem 'font-awesome-sass', '~> 5.15.1'
   gem 'friendly_id', '~> 5.3'
   gem 'image_processing'
   gem 'madmin'
@@ -57,20 +57,43 @@ def add_gems
   gem 'sidekiq', '~> 6.1'
   gem 'sitemap_generator', '~> 6.1', '>= 6.1.2'
   gem 'whenever', require: false
+end
 
-  if rails_5?
-    gsub_file "Gemfile", /gem 'sqlite3'/, "gem 'sqlite3', '~> 1.3.0'"
-    gem 'webpacker', '~> 5.1', '>= 5.1.1'
+def add_test_gems
+  gem_group :test do
+    gem 'capybara'
+    gem 'capybara-screenshot'
+    # Easy installation and use of chromedriver to run system tests with Chrome
+    gem 'selenium-webdriver'
+    gem 'cucumber-rails', require: false
+    gem 'database_cleaner'
+    gem 'rails-controller-testing'
   end
+
+  gem_group :development, :test do
+    # Call 'byebug' anywhere in the code to stop execution and get a debugger console
+    gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
+    gem 'rspec-rails'
+    gem 'factory_bot_rails'
+    gem 'shoulda-matchers'
+    gem 'webdrivers'
+    gem 'faker'
+  end
+end
+
+def pg_db
+  # config the app to use postgres
+  remove_file 'config/database.yml'
+  template 'database.erb', 'config/database.yml'
+end
+
+def yarn(lib)
+  run("yarn add #{lib}")
 end
 
 def set_application_name
   # Add Application Name to Config
-  if rails_5?
-    environment "config.application_name = Rails.application.class.parent_name"
-  else
-    environment "config.application_name = Rails.application.class.module_parent_name"
-  end
+  environment "config.application_name = Rails.application.class.module_parent_name"
 
   # Announce the user where they can change the application name in the future.
   puts "You can change application name inside: ./config/application.rb"
@@ -115,37 +138,13 @@ def add_authorization
   generate 'pundit:install'
 end
 
-def add_webpack
-  # Rails 6+ comes with webpacker by default, so we can skip this step
-  return if rails_6?
-
-  # Our application layout already includes the javascript_pack_tag,
-  # so we don't need to inject it
-  rails_command 'webpacker:install'
-end
-
 def add_javascript
-  run "yarn add expose-loader jquery popper.js bootstrap data-confirm-modal local-time"
-
-  if rails_5?
-    run "yarn add turbolinks @rails/actioncable@pre @rails/actiontext@pre @rails/activestorage@pre @rails/ujs@pre"
-  end
-
-  content = <<-JS
-const webpack = require('webpack')
-environment.plugins.append('Provide', new webpack.ProvidePlugin({
-  $: 'jquery',
-  jQuery: 'jquery',
-  Rails: '@rails/ujs'
-}))
-  JS
-
-  insert_into_file 'config/webpack/environment.js', content + "\n", before: "module.exports = environment"
+  yarn("bootstrap@next")
+  yarn("@popperjs/core")
+  yarn ("@fortawesome/fontawesome-free")
 end
 
 def copy_templates
-  remove_file "app/assets/stylesheets/application.css"
-
   copy_file "Procfile"
   copy_file "Procfile.dev"
   copy_file ".foreman"
@@ -156,6 +155,10 @@ def copy_templates
 
   route "get '/terms', to: 'home#terms'"
   route "get '/privacy', to: 'home#privacy'"
+end
+
+def copy_features
+  directory "features", force: true
 end
 
 def add_sidekiq
@@ -228,17 +231,81 @@ def add_sitemap
   rails_command "sitemap:install"
 end
 
+def update_readme
+  template = """
+    ## To get started with your new app
+
+    - cd {app_name}
+    - Update config/database.yml with your database credentials
+    - rails db:create db:migrate
+    - rails g madmin:install # Generate admin dashboards
+    - gem install foreman
+    - foreman start # Run Rails, sidekiq, and webpack-dev-server
+
+    ### Running your app
+
+    To run your app, use `foreman start`. Foreman will run `Procfile.dev` via `foreman start -f Procfile.dev` as configured by the `.foreman` file and will launch the development processes `rails server`, `sidekiq`, and `webpack-dev-server` processes. 
+    You can also run them in separate terminals manually if you prefer.
+    A separate `Procfile` is generated for deploying to production on Heroku.
+
+    ### Authenticate with social networks
+
+    We use the encrypted Rails Credentials for app_id and app_secrets when it comes to omniauth authentication. Edit them as so:
+
+    ```
+    EDITOR=vim rails credentials:edit
+    ```
+
+    Make sure your file follow this structure:
+
+    ```yml
+    secret_key_base: [your-key]
+    development:
+      github:
+        app_id: something
+        app_secret: something
+        options:
+          scope: 'user:email'
+          whatever: true
+    production:
+      github:
+        app_id: something
+        app_secret: something
+        options:
+          scope: 'user:email'
+          whatever: true
+    ```
+
+    With the environment, the service and the app_id/app_secret. If this is done correctly, you should see login links
+    for the services you have added to the encrypted credentials using `EDITOR=vim rails credentials:edit`
+
+    ### Testing
+
+    The app is set up for BDD using cucumber. Just run `cucumber` to be woalked through the process.
+
+    ### Cleaning up
+
+    ```bash
+    rails db:drop
+    spring stop
+    cd ..
+    rm -rf myapp
+    ```
+    """.strip
+    insert_into_file 'README.md', "\n" + template, after: "# README"  
+end
+
 # Main setup
 add_template_repository_to_source_path
 
 add_gems
+add_test_gems
 
 after_bundle do
   set_application_name
   stop_spring
   add_users
   add_authorization
-  add_webpack
   add_javascript
   add_announcements
   add_notifications
@@ -247,10 +314,16 @@ after_bundle do
   add_friendly_id
 
   copy_templates
+  pg_db
   add_whenever
   add_sitemap
+  update_readme
 
   rails_command "active_storage:install"
+  rails_command "generate rspec:install"
+  rails_command "generate cucumber:install"
+
+  copy_features
 
   # Commit everything to git
   unless ENV["SKIP_GIT"]
@@ -265,7 +338,7 @@ after_bundle do
   end
 
   say
-  say "Jumpstart app successfully created!", :blue
+  say "Jumpstarter app successfully created!", :blue
   say
   say "To get started with your new app:", :green
   say "  cd #{app_name}"
