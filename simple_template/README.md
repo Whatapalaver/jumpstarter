@@ -14,8 +14,6 @@ Want to see how the original works? Check out [the Jumpstart walkthrough video](
 - Added BDD testing support with cucumber and includes some starter features
 - Set pg as default database (if you don't want this just comment out the command pg_db in template.rb)
 
-The standard template.rb file generates all of the above pluse some choice features from the Jumpstart template (sidekiq, devise, auth etc). There is also a simple_template/template.rb for only the features listed above.
-
 ## Getting Started
 
 Jumpstarter is a Rails template, so you pass it in as an option when creating a new app.
@@ -39,8 +37,6 @@ Download this repo, so you can reference template.rb locally:
 ```bash
 rails new myapp -m path_to/template.rb
 ```
-
-If you want a super simple paired down app with testing and bootstrap only features (no devise etc) run `rails new myapp -m path_to/simple_template/template.rb`
 
 ❓Having trouble? Try adding `DISABLE_SPRING=1` before `rails new`. Spring will get confused if you create an app with the same name twice.
 
