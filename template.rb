@@ -61,18 +61,13 @@ end
 
 def add_test_gems
   gem_group :test do
-    gem 'capybara'
     gem 'capybara-screenshot'
-    # Easy installation and use of chromedriver to run system tests with Chrome
-    gem 'selenium-webdriver'
     gem 'cucumber-rails', require: false
     gem 'database_cleaner'
     gem 'rails-controller-testing'
   end
 
   gem_group :development, :test do
-    # Call 'byebug' anywhere in the code to stop execution and get a debugger console
-    gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
     gem 'rspec-rails'
     gem 'factory_bot_rails'
     gem 'shoulda-matchers'
